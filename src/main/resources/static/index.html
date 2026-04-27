@@ -10,9 +10,11 @@
   <header class="topbar">
     <div class="brand">🔐 IAM 身份中心</div>
     <nav>
-      <a href="/index.html">首页</a>
-      <a href="/oa.html">模拟 OA 门户</a>
+      <a href="/index.html" class="active">首页</a>
+      <a href="/oa.html"> OA 门户</a>
+      <a href="/sso-flow.html">SSO 流程</a>
       <a href="/dashboard.html">仪表盘</a>
+      <a href="/org-sync.html">组织同步</a>
     </nav>
   </header>
 
@@ -61,6 +63,13 @@
 
   <script src="/js/auth.js"></script>
   <script>
+    // 登出时同时清掉 JWT（form submit 前清，兼容无 JS 环境也不受影响）
+    document.addEventListener('DOMContentLoaded', () => {
+      document.getElementById('logoutForm')?.addEventListener('submit', () => {
+        localStorage.removeItem('iam_jwt');
+      });
+    });
+
     renderAuthStatus({
       statusEl: document.getElementById('status'),
       loginBtn: document.getElementById('loginBtn'),
@@ -98,6 +107,13 @@
           'expires_in: ' + token.expires_in + 's\n' +
           'roles: ' + token.scope + '\n\n' +
           '/api/auth/me →\n' + JSON.stringify(me, null, 2);
+        // 刷新顶部登录状态区
+        renderAuthStatus({
+          statusEl: document.getElementById('status'),
+          loginBtn: document.getElementById('loginBtn'),
+          dashBtn: document.getElementById('dashBtn'),
+          logoutForm: document.getElementById('logoutForm'),
+        });
       } catch (err) {
         result.textContent = '请求异常：' + err.message;
       }

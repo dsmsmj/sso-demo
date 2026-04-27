@@ -1,0 +1,400 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>组织架构同步 - IAM</title>
+  <link rel="stylesheet" href="/css/style.css" />
+  <style>
+    /* 对比布局 */
+    .compare-grid {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      gap: 20px;
+      align-items: start;
+    }
+    @media (max-width: 720px) {
+      .compare-grid { grid-template-columns: 1fr; }
+      .sync-arrow { transform: rotate(90deg); }
+    }
+
+    .panel {
+      background: #fff;
+      border-radius: 10px;
+      box-shadow: 0 1px 3px rgba(0,0,0,.04), 0 8px 24px rgba(0,0,0,.04);
+      overflow: hidden;
+    }
+    .panel-header {
+      padding: 14px 20px;
+      font-weight: 700;
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .panel-header.source { background: #fffbeb; color: #92400e; border-bottom: 2px solid #fcd34d; }
+    .panel-header.synced { background: #eff6ff; color: #1e40af; border-bottom: 2px solid #93c5fd; }
+    .panel-body { padding: 16px 20px; }
+
+    /* 部门树 */
+    .tree { list-style: none; padding: 0; margin: 0; }
+    .tree ul { list-style: none; padding-left: 20px; margin: 0; border-left: 1px dashed #e5e7eb; }
+    .tree li { padding: 3px 0; font-size: 13px; }
+    .dept-id { font-size: 11px; color: #9ca3af; margin-left: 6px; }
+
+    /* 用户迷你表 */
+    .mini-tbl { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 12px; }
+    .mini-tbl th { background: #f9fafb; padding: 5px 8px; text-align: left; font-weight: 600; color: #374151; border-bottom: 1px solid #e5e7eb; }
+    .mini-tbl td { padding: 5px 8px; border-bottom: 1px solid #f3f4f6; }
+    .mini-tbl tr:last-child td { border-bottom: none; }
+    .mini-tbl tr.row-disabled { opacity: .45; }
+
+    .badge {
+      display: inline-block; font-size: 10px; padding: 1px 6px;
+      border-radius: 10px; font-weight: 600;
+    }
+    .badge.active  { background: #dcfce7; color: #166534; }
+    .badge.inactive { background: #fee2e2; color: #991b1b; }
+    .badge.synced-tag { background: #dbeafe; color: #1e40af; }
+
+    /* 同步结果 */
+    .sync-result { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 12px; }
+    .stat-box {
+      flex: 1; min-width: 100px;
+      background: #f9fafb; border: 1px solid #e5e7eb;
+      border-radius: 8px; padding: 10px 14px; text-align: center;
+    }
+    .stat-box .num { font-size: 26px; font-weight: 700; color: #2563eb; }
+    .stat-box .label { font-size: 11px; color: #6b7280; margin-top: 2px; }
+    .stat-box.updated .num { color: #d97706; }
+
+    #syncLog { margin-top: 10px; font-size: 13px; min-height: 20px; }
+
+    .section-title { font-size: 13px; font-weight: 700; color: #6b7280; margin: 12px 0 6px; text-transform: uppercase; letter-spacing: .04em; }
+    .empty-hint { font-size: 13px; color: #9ca3af; padding: 12px 0; }
+
+    /* 箭头 */
+    .sync-arrow {
+      display: flex; align-items: center; justify-content: center;
+      font-size: 28px; color: #9ca3af;
+    }
+    @media (max-width: 720px) { .sync-arrow { transform: rotate(90deg); margin: -4px 0; } }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">🔐 IAM 身份中心</div>
+    <nav>
+      <a href="/index.html">首页</a>
+      <a href="/oa.html">模拟 OA 门户</a>
+      <a href="/sso-flow.html">SSO 流程</a>
+      <a href="/dashboard.html">仪表盘</a>
+      <a href="/org-sync.html" class="active">组织同步</a>
+    </nav>
+  </header>
+
+  <main class="container">
+
+    <!-- 认证状态 + 快速登录 -->
+    <section class="card">
+      <h2>认证状态</h2>
+      <div id="authStatus" class="status loading">检查中…</div>
+      <div class="actions" style="margin-top:12px">
+        <div id="loginForm" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+          <input id="u" placeholder="用户名" value="admin"
+            style="padding:7px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:14px;width:110px" />
+          <input id="p" type="password" placeholder="密码" value="admin123"
+            style="padding:7px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:14px;width:120px" />
+          <button class="btn primary" id="loginBtn">登录</button>
+        </div>
+        <button class="btn ghost" id="logoutBtn" style="display:none">退出</button>
+      </div>
+    </section>
+
+    <!-- 同步触发 -->
+    <section class="card">
+      <h2>触发同步</h2>
+      <p class="muted" style="margin:0 0 12px">
+        调用 <code>POST /api/admin/sync</code>（需要 ADMIN 角色），将左侧 OA 数据写入右侧 IAM 数据库。
+      </p>
+      <div class="actions">
+        <button class="btn primary" id="syncBtn">立即同步</button>
+        <button class="btn" id="refreshBtn">刷新数据</button>
+        <button class="btn ghost" id="rollbackBtn" style="border-color:#fca5a5;color:#dc2626">回滚同步数据</button>
+      </div>
+      <div id="syncLog"></div>
+      <div class="sync-result" id="syncResult" style="display:none">
+        <div class="stat-box">
+          <div class="num" id="deptCreated">-</div>
+          <div class="label">部门新增</div>
+        </div>
+        <div class="stat-box updated">
+          <div class="num" id="deptUpdated">-</div>
+          <div class="label">部门更新</div>
+        </div>
+        <div class="stat-box">
+          <div class="num" id="userCreated">-</div>
+          <div class="label">用户新增</div>
+        </div>
+        <div class="stat-box updated">
+          <div class="num" id="userUpdated">-</div>
+          <div class="label">用户更新</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 左右对比 -->
+    <div class="compare-grid">
+
+      <!-- 左：OA 平台原始数据 -->
+      <div class="panel">
+        <div class="panel-header source">
+          🏢 OA 平台数据（同步源）
+          <span style="font-weight:400;font-size:12px;margin-left:auto">MockOrgSource · 模拟钉钉/LDAP</span>
+        </div>
+        <div class="panel-body">
+          <div class="section-title">部门结构</div>
+          <div id="sourceDeptTree"><span class="empty-hint">加载中…</span></div>
+
+          <div class="section-title" style="margin-top:16px">用户列表</div>
+          <div style="overflow-x:auto">
+            <table class="mini-tbl">
+              <thead><tr><th>用户名</th><th>显示名</th><th>所属部门</th><th>状态</th></tr></thead>
+              <tbody id="sourceUserTbody"><tr><td colspan="4" class="empty-hint">加载中…</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- 箭头 -->
+      <div class="sync-arrow">→</div>
+
+      <!-- 右：IAM 数据库 -->
+      <div class="panel">
+        <div class="panel-header synced">
+          📋 IAM 数据库（同步后）
+          <span style="font-weight:400;font-size:12px;margin-left:auto">departments + users 表</span>
+        </div>
+        <div class="panel-body">
+          <div class="section-title">部门结构</div>
+          <div id="iamDeptTree"><span class="empty-hint">（请先同步）</span></div>
+
+          <div class="section-title" style="margin-top:16px">用户列表</div>
+          <div style="overflow-x:auto">
+            <table class="mini-tbl">
+              <thead><tr><th>用户名</th><th>显示名</th><th>所属部门</th><th>状态</th></tr></thead>
+              <tbody id="iamUserTbody"><tr><td colspan="4" class="empty-hint">（请先同步）</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+  </main>
+
+  <script src="/js/auth.js"></script>
+  <script>
+    const authHeader = () => {
+      const t = localStorage.getItem('iam_jwt');
+      return t ? { Authorization: 'Bearer ' + t } : {};
+    };
+
+    const setLog = (msg, ok = true) => {
+      const el = document.getElementById('syncLog');
+      el.style.color = ok ? '#047857' : '#b91c1c';
+      el.textContent = msg;
+    };
+
+    // ── 认证 ─────────────────────────────────────────────────────────────
+    async function refreshAuth() {
+      const me = await fetchMe();
+      const statusEl  = document.getElementById('authStatus');
+      const logoutBtn = document.getElementById('logoutBtn');
+      const loginForm = document.getElementById('loginForm');
+      if (me.authenticated) {
+        const roles = Array.isArray(me.roles) ? me.roles.join(', ') : (me.roles || '');
+        statusEl.className = 'status ok';
+        statusEl.textContent = `已登录：${me.name || me.username || '(未知)'}  |  roles: ${roles}`;
+        logoutBtn.style.display = '';
+        loginForm.style.display = 'none';
+      } else {
+        statusEl.className = 'status warn';
+        statusEl.textContent = '尚未登录，触发同步需要 ADMIN 角色。';
+        logoutBtn.style.display = 'none';
+        loginForm.style.display = 'flex';
+      }
+    }
+
+    document.getElementById('loginBtn').addEventListener('click', async () => {
+      const u = document.getElementById('u').value.trim();
+      const p = document.getElementById('p').value;
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: u, password: p }),
+      });
+      if (!res.ok) { setLog('登录失败：' + res.status + ' ' + await res.text(), false); return; }
+      const data = await res.json();
+      localStorage.setItem('iam_jwt', data.access_token);
+      setLog('登录成功。');
+      await refreshAuth();
+    });
+
+    document.getElementById('logoutBtn').addEventListener('click', async () => {
+      localStorage.removeItem('iam_jwt');
+      await fetch('/logout', { method: 'POST', credentials: 'include' }).catch(() => {});
+      await refreshAuth();
+      setLog('已退出。');
+    });
+
+    // ── 同步 ─────────────────────────────────────────────────────────────
+    document.getElementById('syncBtn').addEventListener('click', async () => {
+      setLog('同步中…');
+      document.getElementById('syncResult').style.display = 'none';
+      const res = await fetch('/api/admin/sync', { method: 'POST', headers: authHeader() });
+      if (res.status === 401 || res.status === 403) {
+        setLog('权限不足：请先用 admin 账号登录。', false); return;
+      }
+      if (!res.ok) { setLog('同步失败：' + res.status, false); return; }
+      const r = await res.json();
+      document.getElementById('deptCreated').textContent = r.deptCreated;
+      document.getElementById('deptUpdated').textContent = r.deptUpdated;
+      document.getElementById('userCreated').textContent = r.userCreated;
+      document.getElementById('userUpdated').textContent = r.userUpdated;
+      document.getElementById('syncResult').style.display = 'flex';
+      setLog(`同步完成  ${new Date().toLocaleTimeString()}`);
+      await loadAll();
+    });
+
+    document.getElementById('refreshBtn').addEventListener('click', loadAll);
+
+    document.getElementById('rollbackBtn').addEventListener('click', async () => {
+      if (!confirm('将删除所有已同步的部门和无密码用户（lisi / wangwu / muse），本地账号保留。确认回滚？')) return;
+      setLog('回滚中…');
+      document.getElementById('syncResult').style.display = 'none';
+      const res = await fetch('/api/admin/sync', { method: 'DELETE', headers: authHeader() });
+      if (res.status === 401 || res.status === 403) {
+        setLog('权限不足：请先用 admin 账号登录。', false); return;
+      }
+      if (!res.ok) { setLog('回滚失败：' + res.status, false); return; }
+      const r = await res.json();
+      setLog(`回滚完成：删除 ${r.deptsDeleted} 个部门、${r.usersDeleted} 个用户  ${new Date().toLocaleTimeString()}`);
+      await loadAll();
+    });
+
+    // ── 部门树渲染（通用，支持 externalId / parentExternalId 字段名）─────
+    function buildTree(depts) {
+      const byParent = {};
+      for (const d of depts) {
+        const key = d.parentExternalId || '__root__';
+        (byParent[key] = byParent[key] || []).push(d);
+      }
+      for (const k of Object.keys(byParent)) {
+        byParent[k].sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
+      }
+
+      function node(d) {
+        const li = document.createElement('li');
+        li.innerHTML = `🏢 <strong>${d.name}</strong><span class="dept-id">${d.externalId}</span>`;
+        const children = byParent[d.externalId];
+        if (children?.length) {
+          const ul = document.createElement('ul');
+          children.forEach(c => ul.appendChild(node(c)));
+          li.appendChild(ul);
+        }
+        return li;
+      }
+
+      const ul = document.createElement('ul');
+      ul.className = 'tree';
+      (byParent['__root__'] || []).forEach(r => ul.appendChild(node(r)));
+      return ul;
+    }
+
+    // ── 左侧：OA 平台原始数据 ─────────────────────────────────────────
+    async function loadSource() {
+      const res = await fetch('/api/admin/org-source', { headers: authHeader() });
+      if (!res.ok) {
+        document.getElementById('sourceDeptTree').innerHTML = '<span class="empty-hint">需要 ADMIN 权限才能查看同步源数据。</span>';
+        return;
+      }
+      const all = await res.json();
+      // 取第一个源（mock）
+      const source = Object.values(all)[0];
+      if (!source) return;
+
+      // 部门树
+      const treeEl = document.getElementById('sourceDeptTree');
+      treeEl.innerHTML = '';
+      treeEl.appendChild(buildTree(source.departments));
+
+      // 用户表
+      const tbody = document.getElementById('sourceUserTbody');
+      tbody.innerHTML = '';
+      for (const u of source.users) {
+        const tr = document.createElement('tr');
+        if (!u.active) tr.className = 'row-disabled';
+        tr.innerHTML = `
+          <td><code>${u.username}</code></td>
+          <td>${u.displayName}</td>
+          <td><code style="font-size:11px">${u.departmentExternalId || '-'}</code></td>
+          <td><span class="badge ${u.active ? 'active' : 'inactive'}">${u.active ? '启用' : '停用'}</span></td>
+        `;
+        tbody.appendChild(tr);
+      }
+    }
+
+    // ── 右侧：IAM 数据库 ──────────────────────────────────────────────
+    async function loadIam() {
+      const headers = authHeader();
+
+      // 部门
+      const deptRes = await fetch('/api/departments', { headers }).catch(() => null);
+      const treeEl = document.getElementById('iamDeptTree');
+      if (deptRes?.ok) {
+        const depts = await deptRes.json();
+        treeEl.innerHTML = '';
+        if (depts.length) {
+          treeEl.appendChild(buildTree(depts));
+        } else {
+          treeEl.innerHTML = '<span class="empty-hint">（无数据，请先同步）</span>';
+        }
+      }
+
+      // 用户
+      const userRes = await fetch('/api/users', { headers }).catch(() => null);
+      const tbody = document.getElementById('iamUserTbody');
+      if (userRes?.ok) {
+        const users = await userRes.json();
+        tbody.innerHTML = '';
+        if (!users.length) {
+          tbody.innerHTML = '<tr><td colspan="4" class="empty-hint">（无数据，请先同步）</td></tr>';
+          return;
+        }
+        for (const u of users) {
+          const tr = document.createElement('tr');
+          if (u.status === 'DISABLED') tr.className = 'row-disabled';
+          tr.innerHTML = `
+            <td><code>${u.username || '-'}</code></td>
+            <td>${u.displayName || '-'}</td>
+            <td><code style="font-size:11px">${u.departmentExternalId || '-'}</code></td>
+            <td><span class="badge ${u.status === 'ACTIVE' ? 'active' : 'inactive'}">${u.status}</span></td>
+          `;
+          tbody.appendChild(tr);
+        }
+      }
+    }
+
+    async function loadAll() {
+      await Promise.all([loadSource(), loadIam()]);
+    }
+
+    // ── 初始化 ────────────────────────────────────────────────────────
+    (async () => {
+      await refreshAuth();
+      await loadAll();
+    })();
+  </script>
+</body>
+</html>

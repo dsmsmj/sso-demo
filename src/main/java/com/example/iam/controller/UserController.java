@@ -1,7 +1,12 @@
 package com.example.iam.controller;
 
+import com.example.iam.dto.ExternalDepartment;
+import com.example.iam.dto.ExternalUser;
+import com.example.iam.entity.Department;
 import com.example.iam.entity.User;
+import com.example.iam.repository.DepartmentRepository;
 import com.example.iam.repository.UserRepository;
+import com.example.iam.sync.OrgSource;
 import com.example.iam.sync.OrgSyncService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -9,8 +14,10 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.core.oidc.user.OidcUser;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * REST Controller 示例。
@@ -35,7 +42,9 @@ import java.util.Map;
 public class UserController {
 
     private final UserRepository userRepository;
+    private final DepartmentRepository departmentRepository;
     private final OrgSyncService orgSyncService;
+    private final List<OrgSource> orgSources;
 
     /**
      * 公开接口:不用登录就能访问。
@@ -124,8 +133,47 @@ public class UserController {
                 "message", "IAM 中未找到匹配用户（sub=" + sub + "），请先触发组织同步"));
     }
 
+    @GetMapping("/departments")
+    public List<Department> listDepartments() {
+        return departmentRepository.findAll();
+    }
+
+    /** 返回所有 OrgSource 的原始数据（同步前的"OA 平台视角"）。 */
+    @GetMapping("/admin/org-source")
+    public Map<String, Object> orgSourceData() {
+        Map<String, Object> result = new LinkedHashMap<>();
+        for (OrgSource source : orgSources) {
+            List<ExternalDepartment> depts = source.fetchDepartments();
+            List<ExternalUser> users = source.fetchUsers();
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("departments", depts);
+            payload.put("users", users);
+            result.put(source.getSourceName(), payload);
+        }
+        return result;
+    }
+
     @PostMapping("/admin/sync")
     public OrgSyncService.SyncResult triggerSync() {
         return orgSyncService.syncAll();
+    }
+
+    /**
+     * 回滚：删除所有部门 + 删除无密码的纯同步用户（lisi/wangwu/muse 等）。
+     * 有密码的本地账号（admin/zhangsan/demo）保留，保证回滚后仍可登录。
+     */
+    @DeleteMapping("/admin/sync")
+    @Transactional
+    public Map<String, Object> rollbackSync() {
+        long deptCount = departmentRepository.count();
+        departmentRepository.deleteAll();
+        long usersBefore = userRepository.count();
+        userRepository.deleteByPasswordIsNull();
+        long usersDeleted = usersBefore - userRepository.count();
+        return Map.of(
+            "deptsDeleted", deptCount,
+            "usersDeleted", usersDeleted,
+            "message", "回滚完成，已保留本地账号"
+        );
     }
 }

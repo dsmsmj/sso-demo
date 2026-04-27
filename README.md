@@ -51,13 +51,13 @@ src/main/java/com/example/iam/
 mvn spring-boot:run
 
 # 手动触发一次同步
-curl -X POST http://localhost:8080/api/admin/sync
+curl -X POST http://localhost:8000/api/admin/sync
 
 # 查看同步后的用户
-curl http://localhost:8080/api/users
+curl http://localhost:8000/api/users
 
 # H2 数据库控制台(浏览器访问)
-http://localhost:8080/h2-console
+http://localhost:8000/h2-console
 ```
 
 ## 学习路线(按此顺序读代码)

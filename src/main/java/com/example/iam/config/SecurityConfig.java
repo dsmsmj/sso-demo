@@ -58,7 +58,7 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers(
                     "/", "/index.html", "/oa.html", "/dashboard.html",
-                    "/sso-flow.html", "/target.html",
+                    "/sso-flow.html", "/target.html", "/org-sync.html",
                     "/css/**", "/js/**", "/favicon.ico", "/error",
                     "/sso/launch", "/target/enter", "/api/target/me"
                 ).permitAll()

@@ -37,4 +37,6 @@ public interface UserRepository extends JpaRepository<User, Long> {
     List<User> findByDepartmentExternalId(String departmentExternalId);
 
     List<User> findByStatus(User.UserStatus status);
+
+    void deleteByPasswordIsNull();
 }

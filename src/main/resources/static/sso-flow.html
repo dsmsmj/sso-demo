@@ -28,8 +28,28 @@
       background: var(--bg);
       color: var(--text);
       line-height: 1.6;
-      padding: 24px 16px 80px;
+      padding: 0 0 80px;
     }
+
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 14px 28px;
+      background: #1f2430;
+      color: #fff;
+      margin-bottom: 24px;
+    }
+    .topbar .brand { font-weight: 600; font-size: 16px; }
+    .topbar nav a {
+      color: #c5c9d2;
+      margin-left: 18px;
+      text-decoration: none;
+      font-size: 14px;
+    }
+    .topbar nav a:hover, .topbar nav a.active { color: #fff; }
+
+    .page-header { padding: 0 16px 0; }
 
     h1 { font-size: 1.6rem; margin-bottom: 4px; }
     h2 { font-size: 1.1rem; margin-bottom: 12px; }
@@ -295,6 +315,17 @@
   </style>
 </head>
 <body>
+
+<header class="topbar">
+  <div class="brand">🔐 IAM 身份中心</div>
+  <nav>
+    <a href="/index.html">首页</a>
+    <a href="/oa.html"> OA 门户</a>
+    <a href="/sso-flow.html" class="active">SSO 流程</a>
+    <a href="/dashboard.html">仪表盘</a>
+    <a href="/org-sync.html">组织同步</a>
+  </nav>
+</header>
 
 <div class="page-header">
   <h1>🔐 点击「IAM 系统」之后发生了什么？</h1>
@@ -712,9 +743,6 @@ public ResponseEntity&lt;?&gt; me(
   </div>
 </div>
 
-<p style="text-align:center;color:var(--muted);font-size:0.78rem;margin-top:32px">
-  访问入口：<a href="/oa.html">OA 门户</a> · <a href="/dashboard.html">IAM 仪表盘</a> · <a href="/index.html">首页</a>
-</p>
 
 </body>
 </html>
