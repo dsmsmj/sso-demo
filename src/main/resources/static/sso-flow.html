@@ -1,0 +1,720 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>SSO 完整流程图解</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --browser:  #2563eb;
+      --spring:   #16a34a;
+      --keycloak: #7c3aed;
+      --oa:       #d97706;
+      --fast:     #0891b2;
+      --err:      #dc2626;
+      --bg:       #f8fafc;
+      --card:     #ffffff;
+      --border:   #e2e8f0;
+      --text:     #1e293b;
+      --muted:    #64748b;
+      --code-bg:  #1e293b;
+      --code-fg:  #e2e8f0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      padding: 24px 16px 80px;
+    }
+
+    h1 { font-size: 1.6rem; margin-bottom: 4px; }
+    h2 { font-size: 1.1rem; margin-bottom: 12px; }
+    h3 { font-size: 0.95rem; margin-bottom: 8px; font-weight: 600; }
+    p  { margin-bottom: 8px; color: var(--muted); font-size: 0.9rem; }
+
+    .page-header {
+      max-width: 960px;
+      margin: 0 auto 32px;
+      border-bottom: 2px solid var(--border);
+      padding-bottom: 16px;
+    }
+    .subtitle { color: var(--muted); font-size: 0.95rem; margin-top: 6px; }
+
+    /* ── Actor legend ── */
+    .legend {
+      display: flex; gap: 12px; flex-wrap: wrap;
+      margin: 16px 0;
+    }
+    .legend-item {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 0.82rem; font-weight: 600;
+    }
+    .dot {
+      width: 12px; height: 12px; border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    /* ── Swimlane header ── */
+    .swimlane-header {
+      display: grid;
+      grid-template-columns: 180px 1fr 1fr 1fr;
+      gap: 0;
+      max-width: 960px;
+      margin: 0 auto 0;
+      border: 1px solid var(--border);
+      border-radius: 10px 10px 0 0;
+      overflow: hidden;
+    }
+    .lane-head {
+      padding: 10px 14px;
+      font-weight: 700;
+      font-size: 0.82rem;
+      text-align: center;
+      color: #fff;
+    }
+    .lane-step  { background: #475569; }
+    .lane-br    { background: var(--browser); }
+    .lane-sp    { background: var(--spring); }
+    .lane-kc    { background: var(--keycloak); }
+
+    /* ── Main flow container ── */
+    .flow-wrap {
+      max-width: 960px;
+      margin: 0 auto;
+      border: 1px solid var(--border);
+      border-top: none;
+      border-radius: 0 0 10px 10px;
+      overflow: hidden;
+    }
+
+    /* ── Step row ── */
+    .step {
+      display: grid;
+      grid-template-columns: 180px 1fr 1fr 1fr;
+      border-top: 1px solid var(--border);
+      background: var(--card);
+      transition: background 0.15s;
+    }
+    .step:hover { background: #f1f5f9; }
+
+    .step.branch-fast  { background: #ecfeff; }
+    .step.branch-fast:hover { background: #cffafe; }
+    .step.branch-full  { background: #faf5ff; }
+    .step.branch-full:hover { background: #ede9fe; }
+    .step.branch-both  { background: #fff; }
+
+    /* step number cell */
+    .step-meta {
+      padding: 14px 12px;
+      border-right: 1px solid var(--border);
+      display: flex; flex-direction: column;
+      gap: 4px;
+    }
+    .step-num {
+      width: 26px; height: 26px; border-radius: 50%;
+      background: var(--text); color: #fff;
+      font-size: 0.75rem; font-weight: 700;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .step-num.fast   { background: var(--fast); }
+    .step-num.full   { background: var(--keycloak); }
+    .step-label {
+      font-size: 0.72rem; color: var(--muted); line-height: 1.3;
+    }
+    .badge {
+      display: inline-block;
+      font-size: 0.65rem; font-weight: 700;
+      padding: 1px 6px; border-radius: 20px;
+      margin-top: 4px; width: fit-content;
+    }
+    .badge.fast  { background: #cffafe; color: #0e7490; }
+    .badge.full  { background: #ede9fe; color: #6d28d9; }
+    .badge.both  { background: #f1f5f9; color: #475569; }
+
+    /* actor cells */
+    .cell {
+      padding: 14px 12px;
+      border-right: 1px solid var(--border);
+      font-size: 0.83rem;
+    }
+    .cell:last-child { border-right: none; }
+    .cell.active { }
+    .cell.dim { opacity: 0.3; }
+
+    /* arrow */
+    .arrow {
+      display: flex; align-items: center; gap: 6px;
+      font-weight: 600; font-size: 0.82rem;
+      margin-bottom: 6px;
+      flex-wrap: wrap;
+    }
+    .arrow-line {
+      flex: 1; min-width: 20px; height: 2px;
+      position: relative;
+    }
+    .arrow-line::after {
+      content: '';
+      position: absolute;
+      right: -1px; top: -4px;
+      border: 5px solid transparent;
+    }
+    .arr-r::after { border-left-color: currentColor; }
+    .arr-l::after {
+      left: -1px; right: auto;
+      border-right-color: currentColor;
+    }
+    .arr-down {
+      writing-mode: initial;
+      display: inline-block;
+      font-size: 1.1rem;
+    }
+
+    /* method badge */
+    .method {
+      display: inline-block;
+      font-size: 0.68rem; font-weight: 700;
+      padding: 1px 5px; border-radius: 3px; color: #fff;
+      flex-shrink: 0;
+    }
+    .get  { background: var(--browser); }
+    .post { background: #d97706; }
+    .res  { background: #475569; }
+
+    /* code block */
+    pre {
+      background: var(--code-bg);
+      color: var(--code-fg);
+      border-radius: 6px;
+      padding: 10px 12px;
+      font-size: 0.75rem;
+      overflow-x: auto;
+      margin-top: 6px;
+      line-height: 1.5;
+    }
+    code { font-family: "Fira Code", "Cascadia Code", Consolas, monospace; }
+    .hl   { color: #fbbf24; }   /* highlight param name */
+    .val  { color: #86efac; }   /* highlight value */
+    .cm   { color: #6b7280; }   /* comment */
+
+    /* note callout */
+    .note {
+      background: #fffbeb;
+      border-left: 3px solid #f59e0b;
+      padding: 8px 10px;
+      border-radius: 0 4px 4px 0;
+      font-size: 0.8rem;
+      margin-top: 8px;
+      color: #92400e;
+    }
+    .note.danger {
+      background: #fef2f2;
+      border-left-color: var(--err);
+      color: #991b1b;
+    }
+    .note.ok {
+      background: #f0fdf4;
+      border-left-color: var(--spring);
+      color: #166534;
+    }
+    .note.info {
+      background: #eff6ff;
+      border-left-color: var(--browser);
+      color: #1e40af;
+    }
+
+    /* branch divider */
+    .branch-divider {
+      max-width: 960px;
+      margin: 24px auto 0;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    .branch-card {
+      border-radius: 10px;
+      padding: 12px 16px;
+      font-size: 0.85rem;
+      font-weight: 600;
+    }
+    .branch-card.fast {
+      background: #ecfeff;
+      border: 2px solid #06b6d4;
+      color: #0e7490;
+    }
+    .branch-card.full {
+      background: #faf5ff;
+      border: 2px solid #8b5cf6;
+      color: #6d28d9;
+    }
+
+    /* verdict */
+    .verdict {
+      max-width: 960px; margin: 24px auto 0;
+      border: 1px solid var(--border); border-radius: 10px;
+      background: var(--card); overflow: hidden;
+    }
+    .verdict-head {
+      background: var(--text); color: #fff;
+      padding: 10px 16px; font-weight: 700; font-size: 0.9rem;
+    }
+    .verdict-body { padding: 16px; }
+    .verdict-row {
+      display: flex; gap: 12px; align-items: flex-start;
+      padding: 8px 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.85rem;
+    }
+    .verdict-row:last-child { border-bottom: none; }
+    .verdict-key { flex: 0 0 160px; font-weight: 600; color: var(--muted); }
+    .verdict-val { flex: 1; }
+
+    /* section title outside main card */
+    .section-title {
+      max-width: 960px; margin: 32px auto 12px;
+      font-size: 1rem; font-weight: 700;
+      color: var(--text);
+      padding-left: 4px;
+      border-left: 4px solid var(--browser);
+      padding-left: 10px;
+    }
+
+    /* responsive */
+    @media (max-width: 720px) {
+      .swimlane-header,
+      .step {
+        grid-template-columns: 90px 1fr 1fr;
+      }
+      .cell.kc-cell,
+      .lane-head.lane-kc { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="page-header">
+  <h1>🔐 点击「IAM 系统」之后发生了什么？</h1>
+  <p class="subtitle">
+    OA 门户 → <code>/sso/launch</code> → Spring Security OAuth2 → Keycloak → Session 建立 → Dashboard
+  </p>
+  <div class="legend">
+    <div class="legend-item"><div class="dot" style="background:var(--browser)"></div>浏览器 / OA 门户</div>
+    <div class="legend-item"><div class="dot" style="background:var(--spring)"></div>Spring Boot (SsoController + Security)</div>
+    <div class="legend-item"><div class="dot" style="background:var(--keycloak)"></div>Keycloak (IdP)</div>
+    <div class="legend-item"><div class="dot" style="background:var(--fast)"></div>快速路径（已登录）</div>
+    <div class="legend-item"><div class="dot" style="background:var(--keycloak);opacity:.5"></div>完整 SSO 路径（未登录）</div>
+  </div>
+</div>
+
+<!-- branch summary -->
+<div class="branch-divider">
+  <div class="branch-card fast">
+    ⚡ 快速路径（已有 session）<br>
+    <span style="font-weight:400;font-size:0.8rem">步骤 1 → 2A → 结束，1 次 HTTP，无感跳转</span>
+  </div>
+  <div class="branch-card full">
+    🔄 完整 SSO 路径（未登录）<br>
+    <span style="font-weight:400;font-size:0.8rem">步骤 1 → 2B → 3 → 4 → 5 → 6 → 7 → 结束</span>
+  </div>
+</div>
+
+<p class="section-title">▶ 完整时序（点击展开每一行可看参数）</p>
+
+<!-- swimlane header -->
+<div class="swimlane-header">
+  <div class="lane-head lane-step">步骤</div>
+  <div class="lane-head lane-br">🌐 浏览器 / OA</div>
+  <div class="lane-head lane-sp">🍃 Spring Boot</div>
+  <div class="lane-head lane-kc">🔑 Keycloak</div>
+</div>
+
+<div class="flow-wrap">
+
+  <!-- ── STEP 1 ── -->
+  <div class="step branch-both">
+    <div class="step-meta">
+      <div class="step-num">1</div>
+      <div class="step-label">用户点击<br>IAM 磁贴</div>
+      <div class="badge both">两条路径共用</div>
+    </div>
+    <div class="cell active">
+      <div class="arrow" style="color:var(--spring)">
+        <span class="method get">GET</span>
+        <span>/sso/launch</span>
+        <div class="arrow-line arr-r" style="background:var(--spring);color:var(--spring)"></div>
+        →
+      </div>
+      <p>oa.html 里磁贴 href 是 <code>/sso/launch</code>（不再是写死的 OAuth2 端点）。<br>
+      浏览器发出最普通的 GET 请求，携带当前域名下所有 Cookie。</p>
+      <pre><code><span class="hl">GET</span> http://localhost:8000/sso/launch
+<span class="hl">Host:</span> <span class="val">localhost:8000</span>
+<span class="hl">Cookie:</span> <span class="val">JSESSIONID=ABC123...</span>  <span class="cm">← 如果有 session 才存在</span>
+<span class="hl">Referer:</span> <span class="val">http://localhost:8000/oa.html</span></code></pre>
+    </div>
+    <div class="cell active">
+      <p>Spring Security <strong>Filter Chain</strong> 先接手：</p>
+      <pre><code><span class="cm">// SecurityConfig 里</span>
+.requestMatchers(<span class="val">"/sso/launch"</span>).permitAll()
+<span class="cm">// → 不拦截，直接放行到 Controller</span></code></pre>
+      <p>请求到达 <code>SsoController.launch()</code>，Spring 尝试从当前 Session 里<br>
+      解析 <code>OidcUser</code>，注入到 <code>@AuthenticationPrincipal</code>。</p>
+    </div>
+    <div class="cell dim">—</div>
+  </div>
+
+  <!-- ── STEP 2A ── -->
+  <div class="step branch-fast">
+    <div class="step-meta">
+      <div class="step-num fast">2A</div>
+      <div class="step-label">已有 session<br>直接跳 Dashboard</div>
+      <div class="badge fast">⚡ 快速路径</div>
+    </div>
+    <div class="cell active">
+      <div class="arrow" style="color:var(--fast)">
+        ← <span class="method res" style="background:var(--fast)">302</span>
+        <span>Location: /dashboard.html</span>
+      </div>
+      <p>浏览器收到 302，立刻跳到 <code>/dashboard.html</code>，用户毫无感知。</p>
+      <pre><code><span class="cm">← 服务端响应</span>
+<span class="hl">HTTP/1.1</span> <span class="val">302 Found</span>
+<span class="hl">Location:</span> <span class="val">http://localhost:8000/dashboard.html</span>
+<span class="hl">Set-Cookie:</span> <span class="cm">（不变，session 继续复用）</span></code></pre>
+      <div class="note ok">✅ 流程到此结束。全程只有 <strong>1 次 HTTP</strong>，无需任何 Keycloak 交互。</div>
+    </div>
+    <div class="cell active">
+      <pre><code><span class="cm">// SsoController.java</span>
+<span class="hl">if</span> (principal != <span class="val">null</span>) {
+  response.sendRedirect(<span class="val">"/dashboard.html"</span>);
+}
+<span class="cm">// principal 由 Spring Security 从 Session
+// 里的 SecurityContext 里取出并注入</span></code></pre>
+      <p><code>OidcUser principal</code> 不为 null → session 里有有效认证信息。</p>
+    </div>
+    <div class="cell dim">—（不参与）</div>
+  </div>
+
+  <!-- ── STEP 2B ── -->
+  <div class="step branch-full">
+    <div class="step-meta">
+      <div class="step-num full">2B</div>
+      <div class="step-label">未登录<br>发起 OAuth2</div>
+      <div class="badge full">🔄 完整路径</div>
+    </div>
+    <div class="cell active">
+      <div class="arrow" style="color:var(--keycloak)">
+        ← <span class="method res">302</span>
+        <span>Location: /oauth2/authorization/keycloak</span>
+      </div>
+      <p>浏览器紧接着又发一个 GET 请求到 Spring Boot 的 OAuth2 授权端点。</p>
+      <pre><code><span class="cm">← 服务端响应</span>
+<span class="hl">HTTP/1.1</span> <span class="val">302 Found</span>
+<span class="hl">Location:</span> <span class="val">http://localhost:8000/oauth2/authorization/keycloak</span></code></pre>
+    </div>
+    <div class="cell active">
+      <pre><code><span class="cm">// SsoController.java</span>
+<span class="hl">if</span> (principal == <span class="val">null</span>) {
+  response.sendRedirect(
+    <span class="val">"/oauth2/authorization/keycloak"</span>);
+}
+<span class="cm">// principal 为 null → 没有 session 或 session 过期</span></code></pre>
+    </div>
+    <div class="cell dim">—</div>
+  </div>
+
+  <!-- ── STEP 3 ── -->
+  <div class="step branch-full">
+    <div class="step-meta">
+      <div class="step-num full">3</div>
+      <div class="step-label">Spring 生成<br>授权请求</div>
+      <div class="badge full">🔄 完整路径</div>
+    </div>
+    <div class="cell active">
+      <div class="arrow" style="color:var(--keycloak)">
+        <span class="method get">GET</span>
+        <span>/oauth2/authorization/keycloak</span>
+        →
+      </div>
+      <p>浏览器请求 Spring Boot 内置的授权发起端点（不是 Keycloak，还在 Spring 这边）。</p>
+    </div>
+    <div class="cell active">
+      <p><code>OAuth2AuthorizationRequestRedirectFilter</code> 处理此请求：</p>
+      <pre><code><span class="cm">// 1. 生成随机 state（防 CSRF）</span>
+state = <span class="val">randomBase64(32)</span>
+
+<span class="cm">// 2. 生成随机 nonce（防重放）</span>
+nonce = <span class="val">randomBase64(32)</span>
+
+<span class="cm">// 3. 把 state 存入 session，供回调时验证</span>
+session.setAttribute(
+  "SPRING_SECURITY_SAVED_REQUEST", state)
+
+<span class="cm">// 4. 构造授权 URL，302 重定向到 Keycloak</span></code></pre>
+      <div class="arrow" style="color:var(--keycloak)">
+        ← <span class="method res">302</span> → Keycloak 授权端点（见下方参数）
+      </div>
+    </div>
+    <div class="cell active">
+      <p>即将跳来。</p>
+    </div>
+  </div>
+
+  <!-- ── STEP 4 ── -->
+  <div class="step branch-full">
+    <div class="step-meta">
+      <div class="step-num full">4</div>
+      <div class="step-label">浏览器 →<br>Keycloak 登录</div>
+      <div class="badge full">🔄 完整路径</div>
+    </div>
+    <div class="cell active">
+      <div class="arrow" style="color:var(--keycloak)">
+        <span class="method get">GET</span> Keycloak 授权端点
+        →
+      </div>
+      <p>浏览器跳到 Keycloak，携带以下所有参数：</p>
+      <pre><code>GET /realms/<span class="hl">{realm}</span>/protocol/openid-connect/auth
+  ?<span class="hl">response_type</span>=<span class="val">code</span>
+  &<span class="hl">client_id</span>=<span class="val">iam-client</span>
+  &<span class="hl">redirect_uri</span>=<span class="val">http%3A%2F%2Flocalhost%3A8000
+    %2Flogin%2Foauth2%2Fcode%2Fkeycloak</span>
+  &<span class="hl">scope</span>=<span class="val">openid%20profile%20email</span>
+  &<span class="hl">state</span>=<span class="val">7fK2mN...（随机，防 CSRF）</span>
+  &<span class="hl">nonce</span>=<span class="val">xPq9vR...（随机，防重放攻击）</span></code></pre>
+      <div class="note info">
+        <strong>state</strong>：回调时 Keycloak 原样返回，Spring 与 session 里存的值对比，不一致直接拒绝（防 CSRF 攻击）。<br>
+        <strong>nonce</strong>：写进 id_token，Spring 验证时对比，防止 token 被重放。
+      </div>
+    </div>
+    <div class="cell dim">—</div>
+    <div class="cell active">
+      <p>Keycloak 检查当前浏览器是否已有 <strong>Keycloak SSO Cookie</strong>：</p>
+      <pre><code><span class="cm">场景 A：有 KC_RESTART / KEYCLOAK_SESSION</span>
+→ 无需登录，直接静默回调
+
+<span class="cm">场景 B：没有 SSO Cookie</span>
+→ 显示 Keycloak 登录页面
+→ 用户输入账号密码
+→ Keycloak 验证通过</code></pre>
+      <div class="note">两种场景最终都会走步骤 5，区别只是 B 多一个登录页交互。</div>
+    </div>
+  </div>
+
+  <!-- ── STEP 5 ── -->
+  <div class="step branch-full">
+    <div class="step-meta">
+      <div class="step-num full">5</div>
+      <div class="step-label">Keycloak →<br>授权码回调</div>
+      <div class="badge full">🔄 完整路径</div>
+    </div>
+    <div class="cell active">
+      <div class="arrow" style="color:var(--spring)">
+        ← <span class="method res">302</span> Keycloak 回调到 Spring Boot
+      </div>
+      <pre><code>GET /login/oauth2/code/keycloak
+  ?<span class="hl">code</span>=<span class="val">ey...（授权码，一次性，10 秒内有效）</span>
+  &<span class="hl">state</span>=<span class="val">7fK2mN...（与步骤 3 的 state 相同）</span></code></pre>
+      <div class="note danger">
+        ⚠️ <strong>code</strong> 只能用一次、只在服务端用，绝不能暴露给前端或 URL 历史记录留存太久。
+      </div>
+    </div>
+    <div class="cell active">
+      <p><code>OAuth2LoginAuthenticationFilter</code> 接管：</p>
+      <pre><code><span class="cm">// 1. 验证 state：与 session 里存的值对比</span>
+assert request.state == session.savedState  ✅
+
+<span class="cm">// 2. 用 code 换 token（服务端到服务端）</span>
+POST Keycloak /token  <span class="cm">← 见步骤 6</span></code></pre>
+    </div>
+    <div class="cell active">
+      <p>Keycloak 发出 302 带 code 和 state。</p>
+    </div>
+  </div>
+
+  <!-- ── STEP 6 ── -->
+  <div class="step branch-full">
+    <div class="step-meta">
+      <div class="step-num full">6</div>
+      <div class="step-label">Token 换取<br>（服务端到服务端）</div>
+      <div class="badge full">🔄 完整路径</div>
+    </div>
+    <div class="cell dim">—（浏览器不参与）</div>
+    <div class="cell active">
+      <div class="arrow" style="color:var(--keycloak)">
+        <span class="method post">POST</span> Keycloak Token 端点 →
+      </div>
+      <pre><code>POST /realms/<span class="hl">{realm}</span>/protocol/openid-connect/token
+Content-Type: <span class="val">application/x-www-form-urlencoded</span>
+
+<span class="hl">grant_type</span>=<span class="val">authorization_code</span>
+&<span class="hl">code</span>=<span class="val">ey...（步骤 5 的授权码）</span>
+&<span class="hl">redirect_uri</span>=<span class="val">http://localhost:8000
+  /login/oauth2/code/keycloak</span>
+&<span class="hl">client_id</span>=<span class="val">iam-client</span>
+&<span class="hl">client_secret</span>=<span class="val">（application.yml 里配的）</span></code></pre>
+      <div class="note info">这是<strong>服务端到服务端</strong>的请求，client_secret 不会经过浏览器，这也是授权码流程比 implicit flow 安全的核心原因。</div>
+    </div>
+    <div class="cell active">
+      <p>Keycloak 验证 code + client_secret，返回三个 token：</p>
+      <pre><code>HTTP/1.1 <span class="val">200 OK</span>
+{
+  <span class="hl">"access_token"</span>: <span class="val">"eyJ..."</span>,   <span class="cm">← 访问资源用</span>
+  <span class="hl">"id_token"</span>: <span class="val">"eyJ..."</span>,      <span class="cm">← 身份信息 JWT</span>
+  <span class="hl">"refresh_token"</span>: <span class="val">"eyJ..."</span>, <span class="cm">← 续期用</span>
+  <span class="hl">"expires_in"</span>: <span class="val">300</span>,         <span class="cm">← 5分钟</span>
+  <span class="hl">"token_type"</span>: <span class="val">"Bearer"</span>
+}</code></pre>
+    </div>
+  </div>
+
+  <!-- ── STEP 7 ── -->
+  <div class="step branch-full">
+    <div class="step-meta">
+      <div class="step-num full">7</div>
+      <div class="step-label">解析 id_token<br>建立 Session</div>
+      <div class="badge full">🔄 完整路径</div>
+    </div>
+    <div class="cell active">
+      <div class="arrow" style="color:var(--spring)">
+        ← <span class="method res">302</span> Location: /dashboard.html
+      </div>
+      <p>浏览器收到新 Session Cookie，跳到仪表盘。</p>
+      <pre><code><span class="hl">HTTP/1.1</span> <span class="val">302 Found</span>
+<span class="hl">Location:</span> <span class="val">http://localhost:8000/dashboard.html</span>
+<span class="hl">Set-Cookie:</span> <span class="val">JSESSIONID=XYZ789...</span>
+  <span class="cm">Path=/; HttpOnly; SameSite=Lax</span></code></pre>
+      <div class="note ok">✅ Session 建立，后续请求只需带 Cookie，不再走 OAuth2 流程。</div>
+    </div>
+    <div class="cell active">
+      <p>Spring Security 解析 <code>id_token</code> 的 JWT Payload：</p>
+      <pre><code><span class="cm">// id_token payload 示例（Base64 解码后）</span>
+{
+  <span class="hl">"sub"</span>:   <span class="val">"u001"</span>,
+  <span class="hl">"email"</span>: <span class="val">"alice@example.com"</span>,
+  <span class="hl">"name"</span>:  <span class="val">"Alice"</span>,
+  <span class="hl">"nonce"</span>: <span class="val">"xPq9vR..."</span>,   <span class="cm">← 与步骤 3 对比</span>
+  <span class="hl">"iss"</span>:   <span class="val">"http://keycloak/realms/demo"</span>,
+  <span class="hl">"aud"</span>:   <span class="val">"iam-client"</span>,
+  <span class="hl">"exp"</span>:   <span class="val">1714000000</span>
+}
+
+<span class="cm">// 构造 OidcUser，存入 SecurityContext</span>
+<span class="cm">// SecurityContext → HttpSession → JSESSIONID Cookie</span></code></pre>
+    </div>
+    <div class="cell dim">—（Token 已发完）</div>
+  </div>
+
+  <!-- ── STEP 8 ── -->
+  <div class="step branch-both">
+    <div class="step-meta">
+      <div class="step-num">8</div>
+      <div class="step-label">Dashboard<br>加载用户信息</div>
+      <div class="badge both">两条路径共用</div>
+    </div>
+    <div class="cell active">
+      <div class="arrow" style="color:var(--spring)">
+        <span class="method get">GET</span> /api/me →
+      </div>
+      <p>dashboard.html 的脚本调用 <code>fetchMe()</code>，Spring Boot 从 Session 里取 <code>OidcUser</code> 返回用户信息。</p>
+      <pre><code><span class="cm">← 响应</span>
+{
+  <span class="hl">"authenticated"</span>: <span class="val">true</span>,
+  <span class="hl">"name"</span>:          <span class="val">"Alice"</span>,
+  <span class="hl">"email"</span>:         <span class="val">"alice@example.com"</span>,
+  <span class="hl">"claims"</span>:        { <span class="cm">...完整 OIDC claims...</span> }
+}</code></pre>
+    </div>
+    <div class="cell active">
+      <pre><code><span class="cm">// UserController.java</span>
+@GetMapping(<span class="val">"/me"</span>)
+public ResponseEntity&lt;?&gt; me(
+    @AuthenticationPrincipal OidcUser u) {
+  <span class="hl">if</span> (u == <span class="val">null</span>)
+    return ResponseEntity.status(<span class="val">401</span>)...;
+  return ResponseEntity.ok(Map.of(
+    <span class="val">"name"</span>,  u.getFullName(),
+    <span class="val">"email"</span>, u.getEmail(),
+    <span class="val">"claims"</span>,u.getClaims()
+  ));
+}</code></pre>
+    </div>
+    <div class="cell dim">—</div>
+  </div>
+
+</div><!-- /flow-wrap -->
+
+
+<!-- ── Summary table ── -->
+<p class="section-title">▶ 完整 HTTP 请求清单</p>
+
+<div class="verdict">
+  <div class="verdict-head">全程 HTTP 交互汇总</div>
+  <div class="verdict-body">
+
+    <div class="verdict-row">
+      <div class="verdict-key" style="color:var(--fast)">⚡ 快速路径（2 个）</div>
+      <div class="verdict-val">
+        <code>GET /sso/launch</code> → 302 <code>/dashboard.html</code><br>
+        <code>GET /api/me</code> → 200 用户信息
+      </div>
+    </div>
+
+    <div class="verdict-row">
+      <div class="verdict-key" style="color:var(--keycloak)">🔄 完整路径（8 个）</div>
+      <div class="verdict-val">
+        <ol style="padding-left:16px;font-size:0.82rem;line-height:2">
+          <li><code>GET /sso/launch</code> → 302 <code>/oauth2/authorization/keycloak</code></li>
+          <li><code>GET /oauth2/authorization/keycloak</code> → 302 Keycloak 授权端点（带 state/nonce）</li>
+          <li><code>GET Keycloak /auth?code=...&state=...</code> → Keycloak 登录页 or 静默通过</li>
+          <li><code>POST 账号密码</code>（仅首次，有 SSO session 时跳过）</li>
+          <li>Keycloak → 302 <code>/login/oauth2/code/keycloak?code=...&state=...</code></li>
+          <li>Spring Boot → <code>POST Keycloak /token</code>（code 换 token，服务端发）</li>
+          <li>Keycloak → 200 access_token + id_token + refresh_token</li>
+          <li>Spring Boot → 302 <code>/dashboard.html</code>（Set-Cookie: JSESSIONID）</li>
+        </ol>
+      </div>
+    </div>
+
+    <div class="verdict-row">
+      <div class="verdict-key">关键安全机制</div>
+      <div class="verdict-val">
+        <table style="font-size:0.8rem;border-collapse:collapse;width:100%">
+          <thead>
+            <tr style="background:#f1f5f9">
+              <th style="padding:4px 8px;text-align:left">参数</th>
+              <th style="padding:4px 8px;text-align:left">作用</th>
+              <th style="padding:4px 8px;text-align:left">生命周期</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td style="padding:4px 8px"><code>state</code></td><td style="padding:4px 8px">防 CSRF，回调时验证</td><td style="padding:4px 8px">请求期间，验完即删</td></tr>
+            <tr style="background:#f8fafc"><td style="padding:4px 8px"><code>nonce</code></td><td style="padding:4px 8px">防 id_token 重放</td><td style="padding:4px 8px">写进 JWT，验完即删</td></tr>
+            <tr><td style="padding:4px 8px"><code>code</code></td><td style="padding:4px 8px">一次性授权码，服务端换 token</td><td style="padding:4px 8px">10 秒，单次</td></tr>
+            <tr style="background:#f8fafc"><td style="padding:4px 8px"><code>client_secret</code></td><td style="padding:4px 8px">换 token 时鉴权</td><td style="padding:4px 8px">永远不经浏览器</td></tr>
+            <tr><td style="padding:4px 8px"><code>JSESSIONID</code></td><td style="padding:4px 8px">会话标识，绑定 SecurityContext</td><td style="padding:4px 8px">默认 30 分钟</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="verdict-row">
+      <div class="verdict-key">为什么用 <code>/sso/launch</code></div>
+      <div class="verdict-val">
+        如果 OA 磁贴直接写 <code>/oauth2/authorization/keycloak</code>，
+        即便已登录也会重走一遍 OAuth2 流程（虽然 Keycloak 有 SSO session 会秒过，
+        但仍然产生无意义的 4–5 次 HTTP 往返）。<br>
+        <code>/sso/launch</code> 在 Spring Boot 侧先判断 session，已登录就 1 跳直达，更干净。
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<p style="text-align:center;color:var(--muted);font-size:0.78rem;margin-top:32px">
+  访问入口：<a href="/oa.html">OA 门户</a> · <a href="/dashboard.html">IAM 仪表盘</a> · <a href="/index.html">首页</a>
+</p>
+
+</body>
+</html>

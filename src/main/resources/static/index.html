@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>IAM 系统 - 登录</title>
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">🔐 IAM 身份中心</div>
+    <nav>
+      <a href="/index.html">首页</a>
+      <a href="/oa.html">模拟 OA 门户</a>
+      <a href="/dashboard.html">仪表盘</a>
+    </nav>
+  </header>
+
+  <main class="container">
+    <section class="card">
+      <h1>欢迎来到 IAM 身份中心</h1>
+      <p class="muted">这是一个 Spring Boot + OAuth2/OIDC 的单点登录演示系统。</p>
+
+      <div id="status" class="status loading">正在检查登录状态…</div>
+
+      <div class="actions">
+        <a id="loginBtn" class="btn primary" href="/oauth2/authorization/keycloak">
+          使用 Keycloak 登录
+        </a>
+        <a id="dashBtn" class="btn" href="/dashboard.html" style="display:none">进入仪表盘</a>
+        <form id="logoutForm" action="/logout" method="post" style="display:none">
+          <button class="btn ghost" type="submit">登出</button>
+        </form>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>账号登录（标准 JWT）</h2>
+      <p class="muted">
+        IAM 自己也是一个 OAuth2 Resource Server，用账号密码换 HS256 JWT。
+        默认账号：<code>admin/admin123</code>、<code>zhangsan/user123</code>、<code>demo/demo123</code>。
+      </p>
+      <form id="jwtForm" class="actions" style="flex-wrap:wrap;gap:8px">
+        <input id="jwtUsername" placeholder="用户名" value="admin" required />
+        <input id="jwtPassword" type="password" placeholder="密码" value="admin123" required />
+        <button class="btn primary" type="submit">登录获取 Token</button>
+      </form>
+      <pre id="jwtResult" class="muted" style="white-space:pre-wrap;word-break:break-all"></pre>
+    </section>
+
+    <section class="card">
+      <h2>试试这些流程</h2>
+      <ol class="flow">
+        <li>账号登录 → 拿到 JWT → 浏览器 DevTools 里 <code>fetch('/api/auth/me', { headers: { Authorization: 'Bearer &lt;token&gt;' }})</code> 验证。</li>
+        <li>点上面的"使用 Keycloak 登录"→ 走标准 OAuth2 授权码流程（需要 Keycloak 环境变量）。</li>
+        <li>或者去 <a href="/oa.html">模拟 OA 门户</a>，点击里面的"IAM 系统"图标 → 触发 SSO 跳转。</li>
+        <li>登录成功后自动回到 <a href="/dashboard.html">仪表盘</a>，看到当前用户信息。</li>
+      </ol>
+    </section>
+  </main>
+
+  <script src="/js/auth.js"></script>
+  <script>
+    renderAuthStatus({
+      statusEl: document.getElementById('status'),
+      loginBtn: document.getElementById('loginBtn'),
+      dashBtn: document.getElementById('dashBtn'),
+      logoutForm: document.getElementById('logoutForm'),
+    });
+
+    // JWT 登录 demo：换 token + 立刻调一次 /api/auth/me 验证
+    document.getElementById('jwtForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const result = document.getElementById('jwtResult');
+      result.textContent = '请求中…';
+      try {
+        const loginRes = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            username: document.getElementById('jwtUsername').value,
+            password: document.getElementById('jwtPassword').value,
+          }),
+        });
+        if (!loginRes.ok) {
+          result.textContent = '登录失败：' + loginRes.status + ' ' + await loginRes.text();
+          return;
+        }
+        const token = await loginRes.json();
+        localStorage.setItem('iam_jwt', token.access_token);
+        const meRes = await fetch('/api/auth/me', {
+          headers: { Authorization: 'Bearer ' + token.access_token },
+        });
+        const me = await meRes.json();
+        result.textContent =
+          '✅ Token 已存到 localStorage.iam_jwt\n\n' +
+          'access_token (前40字符): ' + token.access_token.slice(0, 40) + '…\n' +
+          'expires_in: ' + token.expires_in + 's\n' +
+          'roles: ' + token.scope + '\n\n' +
+          '/api/auth/me →\n' + JSON.stringify(me, null, 2);
+      } catch (err) {
+        result.textContent = '请求异常：' + err.message;
+      }
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,22 @@
+# 启用方式：mvn spring-boot:run -Dspring-boot.run.profiles=keycloak
+# 必须同时设置环境变量：
+#   KEYCLOAK_CLIENT_ID
+#   KEYCLOAK_CLIENT_SECRET
+#   KEYCLOAK_ISSUER_URI    例如 http://localhost:8080/realms/iam-demo
+spring:
+  security:
+    oauth2:
+      client:
+        registration:
+          keycloak:
+            client-id: ${KEYCLOAK_CLIENT_ID}
+            client-secret: ${KEYCLOAK_CLIENT_SECRET}
+            authorization-grant-type: authorization_code
+            redirect-uri: "http://localhost:8000/login/oauth2/code/keycloak"
+            scope:
+              - openid
+              - profile
+              - email
+        provider:
+          keycloak:
+            issuer-uri: ${KEYCLOAK_ISSUER_URI}

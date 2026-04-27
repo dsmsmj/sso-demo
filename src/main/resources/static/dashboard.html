@@ -1,0 +1,283 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>IAM 仪表盘</title>
+  <link rel="stylesheet" href="/css/style.css" />
+  <style>
+    .identity-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-top: 12px;
+    }
+    @media (max-width: 640px) { .identity-grid { grid-template-columns: 1fr; } }
+
+    .id-box {
+      border: 1px solid #e5e7eb;
+      border-radius: 8px; padding: 14px 16px;
+    }
+    .id-box h3 {
+      font-size: 0.82rem; font-weight: 700; color: #6b7280;
+      text-transform: uppercase; letter-spacing: .05em;
+      margin-bottom: 10px;
+    }
+    .id-box.keycloak { border-color: #7c3aed; background: #faf5ff; }
+    .id-box.iam      { border-color: #2563eb; background: #eff6ff; }
+    .id-box.oa       { border-color: #d97706; background: #fffbeb; }
+    .id-box.missing  { border-color: #dc2626; background: #fef2f2; }
+
+    .kv { display: flex; gap: 8px; margin-bottom: 6px; font-size: 0.85rem; align-items: baseline; }
+    .kv span { flex: 0 0 72px; color: #6b7280; font-size: 0.78rem; }
+    .kv b { flex: 1; word-break: break-all; }
+
+    .email-bridge {
+      display: flex; align-items: center; gap: 6px;
+      background: #f0fdf4; border: 1px solid #86efac;
+      border-radius: 6px; padding: 8px 12px; margin-top: 12px;
+      font-size: 0.82rem; color: #166534;
+    }
+
+    .tag {
+      display: inline-block; font-size: 0.68rem; font-weight: 700;
+      padding: 1px 8px; border-radius: 20px; margin-left: 6px;
+    }
+    .tag.match   { background: #dcfce7; color: #166534; }
+    .tag.missing { background: #fee2e2; color: #991b1b; }
+
+    .section-label {
+      font-size: 0.75rem; font-weight: 700; color: #9ca3af;
+      text-transform: uppercase; letter-spacing: .08em;
+      margin-bottom: 8px;
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">🔐 IAM 身份中心</div>
+    <nav>
+      <a href="/index.html">首页</a>
+      <a href="/oa.html">OA 门户</a>
+      <a href="/sso-flow.html">SSO 流程</a>
+      <a href="/dashboard.html" class="active">仪表盘</a>
+    </nav>
+  </header>
+
+  <main class="container">
+
+    <!-- 未登录提示 -->
+    <section id="unauthSection" class="card" style="display:none">
+      <div class="status warn">
+        尚未通过 SSO 登录。请先去
+        <a href="/oa.html">OA 门户</a> 点击「IAM 系统」磁贴，
+        或直接 <a href="/oauth2/authorization/keycloak">使用 Keycloak 登录</a>。
+      </div>
+    </section>
+
+    <!-- 已登录主界面 -->
+    <section id="authSection" class="card" style="display:none">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+        <h1 style="margin:0">✅ SSO 登录成功</h1>
+        <form action="/logout" method="post">
+          <button class="btn ghost" type="submit">登出 IAM</button>
+        </form>
+      </div>
+
+      <p class="muted">以下展示三个系统的用户档案如何关联。<strong>Keycloak sub</strong> 是稳定主键，email 仅用于首次绑定。</p>
+
+      <!-- sub 桥梁说明 -->
+      <div class="email-bridge" id="emailBridge" style="display:none">
+        🔗 IAM 档案已通过 <strong>Keycloak sub</strong> 绑定：
+        <strong id="bridgeEmail" style="font-size:.8rem;word-break:break-all">—</strong>
+      </div>
+
+      <div class="identity-grid" style="margin-top:16px">
+
+        <!-- Keycloak 身份（来自 OIDC id_token） -->
+        <div class="id-box keycloak">
+          <h3>🔑 Keycloak 身份（id_token）</h3>
+          <div class="kv"><span>姓名</span><b id="kcName">—</b></div>
+          <div class="kv"><span>Email</span><b id="kcEmail">—</b></div>
+          <div class="kv"><span>sub</span><b id="kcSub" style="font-size:.75rem;color:#6b7280">—</b></div>
+          <div class="kv"><span>来源</span><b style="font-size:.78rem;color:#7c3aed">Keycloak OIDC id_token</b></div>
+        </div>
+
+        <!-- IAM 本地档案（从 users 表按 email 查出） -->
+        <div class="id-box iam" id="iamBox">
+          <h3>📋 IAM 用户档案（本地数据库）</h3>
+          <div id="iamContent"><div class="muted">加载中…</div></div>
+        </div>
+
+      </div>
+
+      <!-- OA session（如果从 OA 跳过来） -->
+      <div id="oaSection" style="display:none;margin-top:12px">
+        <div class="id-box oa">
+          <h3>🏢 OA 门户 Session（独立认证）</h3>
+          <div id="oaContent"></div>
+          <p style="font-size:.78rem;color:#92400e;margin-top:8px">
+            OA 用自己的 <code>oa_users</code> 表做表单认证，session 独立于 Keycloak。<br>
+            email 一致时，点 IAM 磁贴 → Keycloak SSO → 此处的 IAM 档案。
+          </p>
+        </div>
+      </div>
+
+      <!-- 完整 OIDC claims 折叠 -->
+      <details style="margin-top:16px">
+        <summary style="cursor:pointer;font-size:.85rem;color:#6b7280">查看完整 OIDC Claims（id_token payload）</summary>
+        <pre id="claimsBlock" style="margin-top:8px;background:#1e293b;color:#e2e8f0;border-radius:6px;padding:12px;font-size:.75rem;overflow-x:auto"></pre>
+      </details>
+    </section>
+
+    <!-- 组织架构用户列表 -->
+    <section id="usersSection" class="card" style="display:none">
+      <h2>IAM 组织架构 · 同步用户列表</h2>
+      <p class="muted">
+        数据来自 <code>MockOrgSource → users 表</code>。
+        标 <span class="tag match">OA 已对齐</span> 的用户在 OA 和 IAM 都有账号；
+        标 <span class="tag missing">仅 IAM</span> 的在 OA 没有对应账号。
+      </p>
+      <div id="usersBlock" style="margin-top:12px">加载中…</div>
+    </section>
+
+  </main>
+
+  <script src="/js/auth.js"></script>
+  <script>
+    const OA_EMAILS = new Set(); // 存 OA 已知 email 用于打标
+
+    (async () => {
+      // 1. 检查 OIDC session
+      const me = await fetchMe();
+      if (!me.authenticated) {
+        document.getElementById('unauthSection').style.display = '';
+        return;
+      }
+      document.getElementById('authSection').style.display  = '';
+      document.getElementById('usersSection').style.display = '';
+
+      // 2. 填 Keycloak 身份
+      document.getElementById('kcName').textContent  = me.name  || '(未提供)';
+      document.getElementById('kcEmail').textContent = me.email || '(未提供)';
+      document.getElementById('kcSub').textContent   = (me.claims && me.claims.sub) || '—';
+      document.getElementById('claimsBlock').textContent = JSON.stringify(me.claims, null, 2);
+
+      // 4. 查 IAM 本地用户档案（sub 优先，email 兜底绑定）
+      const sub = me.claims && me.claims.sub;
+      await loadIamProfile(sub, me.email);
+
+      // 5. 检查 OA session（展示跨系统对比）
+      await loadOaSession();
+
+      // 6. 加载用户列表
+      await loadUserList(sub);
+    })();
+
+    async function loadIamProfile(sub, email) {
+      const box = document.getElementById('iamContent');
+      if (!sub) {
+        box.innerHTML = '<div class="status warn">Keycloak 未返回 sub，无法查找 IAM 档案。</div>';
+        return;
+      }
+      try {
+        const params = new URLSearchParams({ sub });
+        if (email) params.set('email', email);
+        const res = await fetch('/api/users/profile?' + params, { credentials: 'include' });
+        if (res.ok) {
+          const { user: u, linked } = await res.json();
+          // 绑定成功后显示 sub 桥梁
+          const bridge = document.getElementById('emailBridge');
+          bridge.style.display = '';
+          document.getElementById('bridgeEmail').textContent = sub;
+          box.innerHTML = `
+            <div class="kv"><span>姓名</span><b>${esc(u.displayName)}</b></div>
+            <div class="kv"><span>Email</span><b>${esc(u.email)}</b></div>
+            <div class="kv"><span>用户名</span><b>${esc(u.username)}</b></div>
+            <div class="kv"><span>sub 绑定</span><b style="font-size:.75rem;color:#2563eb">${esc(u.keycloakSub)} ${linked ? '<span class="tag match">✓ 本次首次绑定</span>' : '<span class="tag match">✓ 已绑定</span>'}</b></div>
+            <div class="kv"><span>部门ID</span><b style="font-size:.78rem;color:#6b7280">${esc(u.departmentExternalId)}</b></div>
+            <div class="kv"><span>状态</span><b>${esc(u.status)}</b></div>
+          `;
+        } else {
+          const d = await res.json();
+          document.getElementById('iamBox').className = 'id-box missing';
+          box.innerHTML = `
+            <div class="status warn" style="font-size:.82rem">${esc(d.message)}</div>
+            <p style="font-size:.78rem;color:#6b7280;margin-top:8px">
+              Keycloak sub <b>${esc(sub)}</b> 未绑定，email <b>${esc(email)}</b> 在 IAM 也找不到。<br>
+              确保 MockOrgSource 里有相同 email，然后重新触发同步。
+            </p>
+          `;
+        }
+      } catch (e) {
+        box.innerHTML = `<div class="status warn">请求失败：${esc(String(e))}</div>`;
+      }
+    }
+
+    async function loadOaSession() {
+      try {
+        const res = await fetch('/api/oa/me', { credentials: 'include' });
+        if (!res.ok) return;
+        const u = await res.json();
+        const sec = document.getElementById('oaSection');
+        sec.style.display = '';
+        document.getElementById('oaContent').innerHTML = `
+          <div class="kv"><span>姓名</span><b>${esc(u.displayName)}</b></div>
+          <div class="kv"><span>Email</span><b>${esc(u.email)}</b></div>
+          <div class="kv"><span>部门</span><b>${esc(u.department)}</b></div>
+          <div class="kv"><span>IAM 关联</span><b style="font-size:.78rem;color:#92400e">${esc(u.externalId) || '未设置'} → IAM externalId</b></div>
+          <div class="kv"><span>来源</span><b style="font-size:.78rem;color:#92400e">OA oa_users 表（表单认证）</b></div>
+        `;
+        OA_EMAILS.add(u.email);
+      } catch {}
+    }
+
+    async function loadUserList(currentSub) {
+      const block = document.getElementById('usersBlock');
+      try {
+        // 同时拉 IAM 用户列表和 OA 用户列表
+        const [iamRes, oaRes] = await Promise.all([
+          fetch('/api/users', { credentials: 'include' }),
+          fetch('/api/oa/users', { credentials: 'include' }),
+        ]);
+        const users   = iamRes.ok ? await iamRes.json() : [];
+        const oaUsers = oaRes.ok  ? await oaRes.json()  : [];
+        const oaEmails = new Set(oaUsers.map(u => u.email));
+
+        if (!users.length) {
+          block.innerHTML = '<div class="muted">暂无数据，等待 DataInitializer 完成初始同步…</div>';
+          return;
+        }
+        block.innerHTML = `
+          <table class="tbl">
+            <thead><tr>
+              <th>用户名</th><th>姓名</th><th>Email</th><th>部门</th><th>状态</th><th>OA 账号</th>
+            </tr></thead>
+            <tbody>${users.map(u => {
+              const isMe    = u.keycloakSub === currentSub;
+              const hasOa   = oaEmails.has(u.email);
+              return `<tr${isMe ? ' style="background:#fef9c3"' : ''}>
+                <td>${esc(u.username)}</td>
+                <td><b>${esc(u.displayName)}</b>${isMe ? ' 👈 当前用户' : ''}</td>
+                <td>${esc(u.email)}</td>
+                <td>${esc(u.departmentExternalId)}</td>
+                <td>${esc(u.status)}</td>
+                <td>${hasOa
+                  ? '<span class="tag match">✓ 已对齐</span>'
+                  : '<span class="tag missing">仅 IAM</span>'}</td>
+              </tr>`;
+            }).join('')}</tbody>
+          </table>
+        `;
+      } catch (e) {
+        block.innerHTML = `<div class="status warn">加载失败：${esc(String(e))}</div>`;
+      }
+    }
+
+    function esc(s) {
+      return String(s ?? '').replace(/[&<>"']/g, c =>
+        ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+    }
+  </script>
+</body>
+</html>

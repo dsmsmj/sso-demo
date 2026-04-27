@@ -1,0 +1,269 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>企业 OA 门户</title>
+  <link rel="stylesheet" href="/css/style.css" />
+  <style>
+    /* OA 登录表单 */
+    .login-wrap {
+      max-width: 380px;
+      margin: 60px auto 0;
+    }
+    .login-wrap h1 { font-size: 1.3rem; margin-bottom: 6px; }
+    .form-group { margin-bottom: 14px; }
+    .form-group label {
+      display: block; font-size: 0.85rem;
+      font-weight: 600; margin-bottom: 4px; color: #374151;
+    }
+    .form-group input {
+      width: 100%; padding: 9px 12px;
+      border: 1px solid #d1d5db; border-radius: 6px;
+      font-size: 0.9rem; outline: none;
+      transition: border-color 0.15s;
+    }
+    .form-group input:focus { border-color: #2563eb; }
+    .hint-box {
+      background: #f0fdf4; border: 1px solid #bbf7d0;
+      border-radius: 6px; padding: 10px 14px;
+      font-size: 0.8rem; color: #166534; margin-bottom: 16px;
+    }
+    .hint-box code { background: #dcfce7; padding: 1px 5px; border-radius: 3px; }
+    .err-msg {
+      color: #dc2626; font-size: 0.83rem;
+      margin-top: 8px; display: none;
+    }
+
+    /* OA 门户主界面 */
+    .oa-portal { display: none; }
+    .user-bar {
+      background: #1e3a5f; color: #fff;
+      padding: 10px 20px; border-radius: 8px;
+      display: flex; align-items: center; gap: 12px;
+      margin-bottom: 20px; font-size: 0.88rem;
+    }
+    .user-bar .avatar {
+      width: 36px; height: 36px; border-radius: 50%;
+      background: #3b82f6;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 700; font-size: 1rem;
+    }
+    .user-bar .info { flex: 1; }
+    .user-bar .info b { display: block; font-size: 0.95rem; }
+    .user-bar .info span { opacity: .7; font-size: 0.78rem; }
+    .user-bar .logout-btn {
+      background: rgba(255,255,255,.15); border: none;
+      color: #fff; padding: 5px 12px; border-radius: 4px;
+      cursor: pointer; font-size: 0.8rem;
+    }
+    .user-bar .logout-btn:hover { background: rgba(255,255,255,.25); }
+
+    /* App 磁贴 */
+    .apps { display: grid; grid-template-columns: repeat(auto-fill,minmax(140px,1fr)); gap: 14px; }
+    .app-tile {
+      border: 1px solid #e5e7eb; border-radius: 10px;
+      padding: 20px 12px; text-align: center;
+      text-decoration: none; color: #374151;
+      transition: box-shadow .15s, transform .15s;
+    }
+    .app-tile:hover:not(.disabled) { box-shadow: 0 4px 12px rgba(0,0,0,.12); transform: translateY(-2px); }
+    .app-tile.disabled { opacity: .45; cursor: not-allowed; }
+    .app-tile.sso { border-color: #2563eb; background: #eff6ff; }
+    .app-tile.sso:hover { background: #dbeafe; }
+    .app-icon { font-size: 2rem; margin-bottom: 8px; }
+    .app-name { font-size: 0.85rem; font-weight: 600; margin-bottom: 4px; }
+    .app-tag  { font-size: 0.68rem; color: #9ca3af; }
+    .app-tag.on { color: #2563eb; font-weight: 600; }
+
+    /* SSO hint */
+    .sso-hint {
+      margin-top: 8px; font-size: 0.75rem;
+      color: #1d4ed8; line-height: 1.4;
+    }
+
+    /* Flow box */
+    .flow-box {
+      background: #f8fafc; border: 1px solid #e2e8f0;
+      border-radius: 8px; padding: 16px 20px;
+    }
+    .flow-box ol { padding-left: 18px; }
+    .flow-box li { margin-bottom: 6px; font-size: 0.85rem; }
+  </style>
+</head>
+<body class="oa-theme">
+
+  <header class="topbar oa">
+    <div class="brand">🏢 示例集团 · OA 门户</div>
+    <nav style="margin-left:auto">
+      <a href="/sso-flow.html" style="color:#fff;opacity:.8;font-size:.8rem">📖 SSO 流程图解</a>
+    </nav>
+  </header>
+
+  <!-- ① 登录表单（未登录时显示） -->
+  <div id="loginSection" class="login-wrap card" style="display:none">
+    <h1>🏢 OA 系统登录</h1>
+    <p class="muted" style="margin-bottom:16px">请使用 OA 账号登录企业门户</p>
+
+    <div class="hint-box">
+      测试账号（密码均为 <code>pass123</code>）：<br>
+      <code>zhangsan</code> · 张三 · 技术部<br>
+      <code>lisi</code> · 李四 · 产品部<br>
+      <code>wangwu</code> · 王五 · 人事部
+    </div>
+
+    <form id="loginForm">
+      <div class="form-group">
+        <label for="username">用户名</label>
+        <input id="username"  type="text" placeholder="zhangsan" autocomplete="username" value="zhangsan" required />
+      </div>
+      <div class="form-group">
+        <label for="password">密码</label>
+        <input id="password" type="password" placeholder="pass123" autocomplete="current-password" value="pass123" required />
+      </div>
+      <button class="btn primary" type="submit" style="width:100%">登录 OA</button>
+      <div id="loginErr" class="err-msg"></div>
+    </form>
+  </div>
+
+  <!-- ② OA 门户主界面（已登录时显示） -->
+  <div id="portalSection" class="oa-portal container">
+
+    <!-- 当前 OA 登录用户 -->
+    <div id="userBar" class="user-bar">
+      <div class="avatar" id="avatarText">？</div>
+      <div class="info">
+        <b id="oaDisplayName">—</b>
+        <span id="oaEmail">—</span>
+      </div>
+      <button class="logout-btn" onclick="oaLogout()">退出 OA</button>
+    </div>
+
+    <section class="card">
+      <h1>应用中心</h1>
+      <p class="muted">点击「IAM 系统」磁贴触发单点登录。已在 Keycloak 登录过则直接进入，否则跳转登录页。</p>
+
+      <div class="apps" style="margin-top:16px">
+        <a class="app-tile disabled" href="#" onclick="return false;">
+          <div class="app-icon">📝</div>
+          <div class="app-name">文档中心</div>
+          <div class="app-tag">未接入 SSO</div>
+        </a>
+
+        <a class="app-tile disabled" href="#" onclick="return false;">
+          <div class="app-icon">📊</div>
+          <div class="app-name">CRM</div>
+          <div class="app-tag">未接入 SSO</div>
+        </a>
+
+        <!-- IAM 磁贴：先走 /sso/launch 判断是否已有 OIDC session -->
+        <a class="app-tile sso" href="/sso/launch" id="iamTile">
+          <div class="app-icon">🔐</div>
+          <div class="app-name">IAM 系统</div>
+          <div class="app-tag on">SSO 已接入</div>
+          <div class="sso-hint" id="ssoHint"></div>
+        </a>
+
+        <a class="app-tile disabled" href="#" onclick="return false;">
+          <div class="app-icon">🧾</div>
+          <div class="app-name">报销系统</div>
+          <div class="app-tag">未接入 SSO</div>
+        </a>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>这里发生了什么？</h2>
+      <div class="flow-box">
+        <ol>
+          <li>你已登录 OA（账号存在 <code>oa_users</code> 表，密码 BCrypt 加密）。</li>
+          <li>点击「IAM 系统」→ 浏览器访问 <code>/sso/launch</code>（Spring Boot Controller）。</li>
+          <li>
+            Controller 检测 OIDC session：<br>
+            &nbsp;&nbsp;• 已有 → 直接跳 <code>/dashboard.html</code>（零感知）<br>
+            &nbsp;&nbsp;• 没有 → 跳 Keycloak，用 <b id="emailHint">你的邮箱</b> 登录
+          </li>
+          <li>Keycloak 把 email 写入 id_token，Spring Boot 建立 OIDC session。</li>
+          <li>IAM dashboard 用 token 里的 email 在 <code>users</code> 表查找匹配的 IAM 档案。</li>
+        </ol>
+      </div>
+      <p style="margin-top:12px;font-size:0.8rem;color:#6b7280">
+        💡 email 是跨系统的唯一标识：OA 用户表 → Keycloak 账号 → IAM 用户表，三者靠同一个 email 串联。
+      </p>
+    </section>
+  </div>
+
+  <script>
+    const loginSection  = document.getElementById('loginSection');
+    const portalSection = document.getElementById('portalSection');
+
+    async function init() {
+      try {
+        const res = await fetch('/api/oa/me', { credentials: 'include' });
+        if (res.ok) {
+          const user = await res.json();
+          showPortal(user);
+        } else {
+          showLogin();
+        }
+      } catch {
+        showLogin();
+      }
+    }
+
+    function showLogin() {
+      loginSection.style.display  = '';
+      portalSection.style.display = 'none';
+    }
+
+    function showPortal(user) {
+      loginSection.style.display  = 'none';
+      portalSection.style.display = 'block';
+      document.getElementById('oaDisplayName').textContent = user.displayName + '（' + user.department + '）';
+      document.getElementById('oaEmail').textContent       = user.email;
+      document.getElementById('avatarText').textContent    = user.displayName.charAt(0);
+      document.getElementById('ssoHint').textContent       = '将用 ' + user.email + ' 认证';
+      document.getElementById('emailHint').textContent     = user.email;
+    }
+
+    document.getElementById('loginForm').addEventListener('submit', async e => {
+      e.preventDefault();
+      const errEl = document.getElementById('loginErr');
+      errEl.style.display = 'none';
+      const btn = e.target.querySelector('button');
+      btn.disabled = true; btn.textContent = '登录中…';
+      debugger
+      try {
+        const res = await fetch('/api/oa/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({
+            username: document.getElementById('username').value,
+            password: document.getElementById('password').value,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          errEl.textContent    = data.error || '登录失败';
+          errEl.style.display  = 'block';
+        } else {
+          showPortal(data);
+        }
+      } catch {
+        errEl.textContent   = '网络错误，请重试';
+        errEl.style.display = 'block';
+      } finally {
+        btn.disabled = false; btn.textContent = '登录 OA';
+      }
+    });
+
+    async function oaLogout() {
+      await fetch('/api/oa/logout', { method: 'POST', credentials: 'include' });
+      showLogin();
+    }
+
+    init();
+  </script>
+</body>
+</html>

@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>目标系统（资源服务器）</title>
+  <link rel="stylesheet" href="/css/style.css" />
+  <style>
+    .target-header {
+      background: linear-gradient(135deg, #065f46, #059669);
+      color: #fff;
+      padding: 28px 32px;
+      border-radius: 10px;
+      margin-bottom: 20px;
+    }
+    .target-header h1 { margin: 0 0 6px; font-size: 1.4rem; }
+    .target-header p  { margin: 0; opacity: .85; font-size: .88rem; }
+
+    .verify-badge {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: #d1fae5; color: #065f46;
+      border: 1px solid #6ee7b7;
+      padding: 8px 14px; border-radius: 20px;
+      font-size: .82rem; font-weight: 600;
+      margin-bottom: 20px;
+    }
+
+    .info-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 16px;
+    }
+    .info-card {
+      background: #fff;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      padding: 16px 18px;
+    }
+    .info-card h3 {
+      font-size: .78rem; font-weight: 700; color: #6b7280;
+      text-transform: uppercase; letter-spacing: .06em;
+      margin: 0 0 12px;
+    }
+    .kv { display: flex; gap: 8px; margin-bottom: 7px; font-size: .85rem; }
+    .kv span { flex: 0 0 64px; color: #9ca3af; font-size: .78rem; }
+    .kv b { flex: 1; word-break: break-all; }
+
+    .flow-note {
+      background: #fffbeb; border: 1px solid #fde68a;
+      border-radius: 8px; padding: 14px 18px;
+      font-size: .82rem; color: #78350f;
+      margin-top: 20px;
+    }
+    .flow-note strong { display: block; margin-bottom: 6px; font-size: .85rem; }
+    .flow-note ol { margin: 0; padding-left: 18px; }
+    .flow-note li { margin-bottom: 4px; }
+
+    .claims-raw {
+      background: #1e293b; color: #e2e8f0;
+      border-radius: 6px; padding: 14px;
+      font-size: .75rem; overflow-x: auto;
+      margin-top: 8px;
+    }
+
+    .err-section {
+      background: #fef2f2; border: 1px solid #fca5a5;
+      border-radius: 8px; padding: 20px;
+      color: #991b1b;
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar" style="background: linear-gradient(90deg, #064e3b, #065f46);">
+    <div class="brand">🎯 目标系统（资源服务器）</div>
+    <nav>
+      <a href="/oa.html">← OA 门户</a>
+      <a href="/dashboard.html">IAM 仪表盘</a>
+    </nav>
+  </header>
+
+  <main class="container">
+
+    <!-- 未授权 -->
+    <div id="errSection" class="err-section" style="display:none">
+      <b>未通过目标系统验证</b>
+      <p style="margin:8px 0 0">access_token 无效或 Keycloak 未配置。请从
+        <a href="/oa.html" style="color:#dc2626">OA 门户</a> 重新进入。
+      </p>
+    </div>
+
+    <!-- 已授权 -->
+    <div id="mainSection" style="display:none">
+
+      <div class="target-header">
+        <h1>✅ 已进入目标系统</h1>
+        <p>身份由 Keycloak 授权服务器通过 <code>GET /userinfo</code> 验证，目标系统独立建立了会话。</p>
+      </div>
+
+      <div class="verify-badge">
+        <span>🔒</span>
+        <span>access_token 已通过 /userinfo 验证 · 目标系统会话已建立</span>
+      </div>
+
+      <div class="info-grid">
+        <div class="info-card">
+          <h3>用户身份（来自 /userinfo）</h3>
+          <div class="kv"><span>sub</span><b id="sub" style="font-size:.75rem;color:#6b7280">—</b></div>
+          <div class="kv"><span>姓名</span><b id="name">—</b></div>
+          <div class="kv"><span>Email</span><b id="email">—</b></div>
+          <div class="kv"><span>验证方式</span><b style="color:#059669;font-size:.78rem">Keycloak GET /userinfo</b></div>
+        </div>
+
+        <div class="info-card">
+          <h3>会话说明</h3>
+          <div class="kv"><span>来源</span><b style="font-size:.78rem">OA 携带 access_token 跳转</b></div>
+          <div class="kv"><span>验证</span><b style="font-size:.78rem">目标系统调 /userinfo 确认身份</b></div>
+          <div class="kv"><span>隔离</span><b style="font-size:.78rem">目标系统 session 与 OA 独立</b></div>
+          <div class="kv"><span>无感续期</span><b style="font-size:.78rem">token 过期由 OA 用 refresh_token 刷新</b></div>
+        </div>
+      </div>
+
+      <details style="margin-top:16px">
+        <summary style="cursor:pointer;font-size:.85rem;color:#6b7280">查看完整 /userinfo 响应</summary>
+        <pre id="rawClaims" class="claims-raw"></pre>
+      </details>
+
+      <div class="flow-note">
+        <strong>刚刚发生了什么（持有凭证流程）</strong>
+        <ol>
+          <li>你在 OA 点击「IAM 系统」磁贴 → 浏览器访问 <code>/sso/launch</code></li>
+          <li>OA 后端（SsoController）检测到已有 OIDC session，取出 <code>access_token</code></li>
+          <li>若 token 已过期 → POST <code>refresh_token</code> 到 Keycloak <code>/token</code> 换新 token（无感续期）</li>
+          <li>302 跳转到 <code>/target/enter?token=xxx</code>（携带 token 进入目标系统）</li>
+          <li>目标系统（TargetController）用 token 调 Keycloak <code>GET /userinfo</code> 验证身份</li>
+          <li>验证通过 → 建立目标系统独立 session → 进入本页面</li>
+        </ol>
+      </div>
+
+    </div>
+  </main>
+
+  <script>
+    (async () => {
+      try {
+        const res = await fetch('/api/target/me', { credentials: 'include' });
+        if (!res.ok) {
+          document.getElementById('errSection').style.display = '';
+          return;
+        }
+        const user = await res.json();
+        document.getElementById('mainSection').style.display = '';
+        document.getElementById('sub').textContent   = user.sub   || '—';
+        document.getElementById('name').textContent  = user.name  || user.preferred_username || '—';
+        document.getElementById('email').textContent = user.email || '—';
+        document.getElementById('rawClaims').textContent = JSON.stringify(user, null, 2);
+      } catch {
+        document.getElementById('errSection').style.display = '';
+      }
+    })();
+  </script>
+</body>
+</html>

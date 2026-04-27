@@ -1,0 +1,58 @@
+# application.yml 是 Spring Boot 的配置中心
+# TS 类比:相当于 .env + config.ts 的组合,但功能强大得多
+# 支持多环境(dev/prod)、类型安全绑定、加密、远程配置等
+
+server:
+  port: 8000
+
+spring:
+  application:
+    name: iam-starter
+
+  # H2 内存数据库配置(演示用,重启就清空)
+  # 真实生产环境改成 MySQL/PostgreSQL 的连接串
+  datasource:
+    url: jdbc:h2:mem:iamdb;DB_CLOSE_DELAY=-1
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+
+  h2:
+    console:
+      enabled: true
+      path: /h2-console # 访问 http://localhost:8080/h2-console 可以看数据库
+
+  jpa:
+    hibernate:
+      ddl-auto: update # 自动根据 @Entity 建表,生产环境用 flyway/liquibase
+    show-sql: true # 打印 SQL 便于调试
+    properties:
+      hibernate:
+        format_sql: true
+
+  # OAuth2 Client（外部 SSO，例如 Keycloak）默认不开。
+  # 启用方式：spring.profiles.active=keycloak，并设环境变量 KEYCLOAK_CLIENT_ID / KEYCLOAK_CLIENT_SECRET / KEYCLOAK_ISSUER_URI。
+  # 见 application-keycloak.yml。
+
+# 自定义配置:LDAP 连接信息
+# @ConfigurationProperties 可以类型安全地读取这些值
+ldap:
+  url: ldap://localhost:389
+  base-dn: dc=example,dc=com
+  username: cn=admin,dc=example,dc=com
+  password: admin
+  # 同步频率(cron 表达式),每 5 分钟同步一次
+  sync-cron: "0 */5 * * * *"
+
+# 自签 JWT 配置（HS256）
+# secret 至少 32 字节（256 bit），生产环境放环境变量或密钥管理服务
+app:
+  jwt:
+    issuer: iam-starter
+    secret: ${APP_JWT_SECRET:change-me-please-this-is-a-demo-secret-32+}
+    expiration-minutes: 60
+
+logging:
+  level:
+    com.example.iam: DEBUG
+    org.springframework.security: INFO
